@@ -1,0 +1,126 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon May 18 20:14:50 2020
+
+@author: Sreeraman
+"""
+
+from keras.layers import Input,Lambda
+from keras.layers import Dense,Reshape
+from keras.layers import Flatten
+from keras.layers import Conv2D
+from keras.layers import Conv2DTranspose
+from keras.layers import MaxPooling2D
+from keras.layers import UpSampling2D
+from keras.layers import PReLU
+from keras.models import Model
+from keras.layers import Dropout
+from keras.layers import Masking
+from keras.layers import multiply
+from keras import backend as K
+from keract import get_activations, display_activations
+from keras.layers.normalization import BatchNormalization
+import matplotlib.pyplot as plt
+from keras import optimizers
+from keras import losses
+import tensorflow as tf
+from keras.layers import GaussianNoise
+import os
+import numpy as np
+import cv2
+cwd = os.getcwd()  # Get the current working directory (cwd)
+files = os.listdir(cwd)  # Get all the files in that directory
+print("Files in %r: %s" % (cwd, files))
+
+input_img = Input(shape=(224, 224, 3),name='input_1')  # adapt this if using `channels_first` image data format
+x = Conv2D(128, (3, 3), padding='same', name='conv_layer_1')(input_img)
+x = PReLU()(x)
+x = BatchNormalization()(x)
+x = MaxPooling2D((2, 2), strides=2)(x)
+x = Conv2D(64, (3, 3), padding='same',name='conv_layer_2')(x)
+x = PReLU()(x)
+#x = BatchNormalization()(x)
+x = MaxPooling2D((2, 2), strides=2)(x)
+x = Conv2D(64, (3, 3), padding='same',name='conv_layer_3')(x)
+x = PReLU()(x)
+x = MaxPooling2D((2, 2), strides=2)(x)
+#x = Conv2D(32, (3, 3), padding='same',name='conv_layer_4')(x)
+#x = PReLU()(x)
+#x = MaxPooling2D((2, 2), strides=2)(x)
+x = Conv2D(8, (3, 3), activation='relu',name='conv_layer_5', padding='same')(x)
+x = PReLU()(x)
+encoded = MaxPooling2D((2, 2),strides=2 )(x)
+print("encoded shape; ", encoded.shape)
+print(type(encoded))
+
+# Decoding Layers
+
+x = Conv2D(128, (3, 3), padding='same',name='conv_layer_6')(encoded)
+x = PReLU()(x)
+x = UpSampling2D((2,2))(x)
+x = Conv2D(64, (3, 3), padding='same',name='conv_layer_7')(x)
+x = PReLU()(x)
+x = UpSampling2D((2,2))(x)
+x = Conv2D(64, (3, 3), padding='same',name='conv_layer_8')(x)
+x = PReLU()(x)
+x = UpSampling2D((2, 2))(x)
+x = Conv2D(32, (3, 3), padding ='same',name='conv_layer_9')(x)
+x = PReLU()(x)
+x = UpSampling2D((2, 2))(x)
+x = Conv2D(8, (3, 3), padding ='same',name='conv_layer_10')(x)
+x = PReLU()(x)
+x = UpSampling2D((2, 2))(x)
+#x = Conv2D(128, (3, 3), activation='relu')(x)
+#x = UpSampling2D((2, 2))(x)
+decoded = Conv2D(3, (3, 3), activation='sigmoid', padding='same',name='conv_layer_11')(x)
+#print("x shape; ", x.shape)
+print("decoded shape; ", decoded.shape)
+
+# Generating the model
+
+autoencoder = Model(input_img, decoded)
+encoder = Model(input_img,encoded, name='encoder')
+encoded_input = Input(shape=(14,14,8))
+
+#Compiling the model
+final_lr = autoencoder.layers[-1]
+decoder = Model(encoded_input, final_lr(encoded_input), name='decoder') #final_lr(encoded_input)
+autoencoder.compile( optimizer= 'Adam', #optimizers.Adam(learning_rate=0.001)
+    loss=losses.mean_squared_error)
+encoder.compile( optimizer='Adam',
+    loss=losses.mean_squared_error)
+autoencoder.summary()
+encoder.summary()
+decoder.summary()
+
+#Loading the dataset
+(x_train, y_train)= a.load_dataset()
+(x_test, y_test)  = b.load_dataset()
+#Train and test split
+X_train = x_train[ : ]
+X_test = x_test[ : ]
+#Fitting the model, training
+from keras.callbacks import TensorBoard
+history = autoencoder.fit(X_train,X_train,
+                epochs=100,
+                batch_size=1,
+                shuffle=True,
+                validation_data=(X_test, X_test),
+                callbacks=[TensorBoard(log_dir='D:/Sree program/temp/tb')]
+  
+#plotting the original and reconstructed images
+
+input_sample = X_test[:1]
+reconstruction = autoencoder.predict([input_sample])
+encoded_imgs = encoder.predict([X_test])
+decoded_imgs = autoencoder.predict([X_test])
+print(type(encoded_imgs))
+fig,axes = plt.subplots(1, 2)
+fig.set_size_inches(6, 3.5)
+input_sample_reshaped = input_sample.reshape(224,224,3)
+reconstruction_reshaped = reconstruction.reshape((224,224,3))
+axes[0].imshow(input_sample_reshaped) 
+axes[0].set_title('Original image')
+axes[1].imshow(reconstruction_reshaped)
+axes[1].set_title('Reconstruction')
+plt.show()
